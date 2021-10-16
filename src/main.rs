@@ -1,4 +1,6 @@
 
+use std::iter::Peekable;
+
 use std::fs::{
     self,
     File,
@@ -84,12 +86,12 @@ fn main() -> Result<(), &'static str> {
     match args.action {
         DFTodoAction::Top => print_top(),
         DFTodoAction::Push(item) => push_item(item),
-        DFTodoAction::Pop => Err("Pop not yet implemented"),
+        DFTodoAction::Pop => pop_item(),
     }
 }
 
 fn print_top() -> Result<(), &'static str> {
-    let file = get_active_stack_file()?;
+    let file = get_active_stack_file(true)?;
     let top_item = get_top_item(file);
     match top_item {
         Some(item) => println!("{}", item),
@@ -100,7 +102,7 @@ fn print_top() -> Result<(), &'static str> {
 }
 
 fn push_item(item: DFTodoItem) -> Result<(), &'static str> {
-    let file = get_active_stack_file()?;
+    let file = get_active_stack_file(true)?;
 
     let mut file = LineWriter::new(file);
     file.write_all((item.item + "\n").as_bytes()).unwrap();
@@ -108,10 +110,34 @@ fn push_item(item: DFTodoItem) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn get_active_stack_file() -> Result<File, &'static str> {
+fn pop_item() -> Result<(), &'static str> {
+    let file = get_active_stack_file(true)?;
+    let line_iter = BufReader::new(file).lines().peekable();
+    let content = collect_all_but_last(line_iter);
+    let mut file = get_active_stack_file(false)?;
+    file.write(content.as_bytes()).unwrap();
+
+    Ok(())
+}
+
+fn collect_all_but_last<I>(mut peekable: Peekable<I>) -> String
+where I: Iterator<Item = std::io::Result<String>> {
+    let mut collected: String = String::new();
+    while let Some(Ok(item)) = peekable.next() {
+        if peekable.peek().is_none() {
+            break;
+        }
+
+        collected += &(item + "\n");
+    }
+
+    collected
+}
+
+fn get_active_stack_file(append: bool) -> Result<File, &'static str> {
     let config_file = get_config_file()?;
     let (stack_file_directory, stack_file_name) = get_stack_directory(config_file)?;
-    get_stack_file(stack_file_directory, stack_file_name)
+    get_stack_file(stack_file_directory, stack_file_name, append)
 }
 
 fn get_config_file() -> Result<File, &'static str> {
@@ -136,7 +162,7 @@ fn get_stack_directory(config_file: File) -> Result<(PathBuf, String), &'static 
     Ok((config.data_path, config.file_name))
 }
 
-fn get_stack_file(file_path: PathBuf, file_name: String) -> Result<File, &'static str> {
+fn get_stack_file(file_path: PathBuf, file_name: String, append: bool) -> Result<File, &'static str> {
     let path = file_path.as_path();
     let mut file_path = file_path.clone();
     file_path.push(file_name);
@@ -149,7 +175,8 @@ fn get_stack_file(file_path: PathBuf, file_name: String) -> Result<File, &'stati
     OpenOptions::new()
         .read(true)
         .write(true)
-        .append(true)
+        .append(append)
+        .truncate(!append)
         .create(true)
         .open(file_path).map_err(|_| { "Failed to open stack file" })
 }
