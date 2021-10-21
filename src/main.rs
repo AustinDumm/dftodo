@@ -1,12 +1,13 @@
 
 use std::iter::Peekable;
+use std::path::PathBuf;
+use clap::Clap;
 
 use std::fs::{
     self,
     File,
     OpenOptions
 };
-use std::path::PathBuf;
 
 use std::io::{
     Write,
@@ -15,70 +16,22 @@ use std::io::{
     LineWriter,
 };
 
-use lazy_static::lazy_static;
-use clap::Clap;
-use serde::{
-    Serialize,
-    Deserialize,
-};
 use serde_json;
 
-lazy_static! {
-    static ref CONFIG_PATH: PathBuf = {
-        let mut path = dirs::config_dir().unwrap();
-        path.push("dftodo");
-        path
-    };
+mod config;
 
-    static ref CONFIG_FILE_PATH: PathBuf = {
-        let mut path = dirs::config_dir().unwrap();
-        path.push("dftodo");
-        path.push("config");
-        path.set_extension("json");
-        path
-    };
+use config::{
+    DFTodoArgs,
+    DFTodoAction,
+    DFTodoItem,
 
-    static ref DEFAULT_DATA_PATH: PathBuf = {
-        let mut path = dirs::data_dir().unwrap();
-        path.push("dftodo");
-        path
-    };
-}
-
-const DEFAULT_DATA_FILE_NAME: &str = "stack";
-
-#[derive(Clap, Debug)]
-#[clap(name = "DFTodo", 
-       version = "0.1.0",
-       about = "A simple depth-first stack todo manager with a cli")]
-struct DFTodoArgs {
-    #[clap(subcommand)]
-    action: DFTodoAction,
-}
-
-#[derive(clap::Subcommand, Debug)]
-enum DFTodoAction {
-    #[clap(about = "Display top option in current todo stack")]
-    Top,
-    #[clap(about = "Push new item onto top of current stack")]
-    Push(DFTodoItem),
-    #[clap(about = "Pop top item off of current stack")]
-    Pop,
-}
-
-#[derive(Clap, Debug)]
-struct DFTodoItem {
-    #[clap(about = "Todo item description",
-           index = 1)]
-    item: String,
-}
-
-
-#[derive(Serialize, Deserialize)]
-struct Config {
-    data_path: PathBuf,
-    file_name: String,
-}
+    Config,
+    
+    CONFIG_FILE_PATH,
+    CONFIG_PATH,
+    DEFAULT_DATA_FILE_NAME,
+    DEFAULT_DATA_PATH,
+};
 
 fn main() -> Result<(), &'static str> {
     let args = DFTodoArgs::parse();
