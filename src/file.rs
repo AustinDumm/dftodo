@@ -2,6 +2,8 @@ use std::path::PathBuf;
 use std::io::{
     BufRead,
     BufReader,
+    LineWriter,
+    Write,
 };
 
 use std::fs::{
@@ -17,6 +19,7 @@ use crate::config::{
     DEFAULT_DATA_FILE_NAME,
 
     Config,
+    DFTodoItem,
 };
 
 pub fn get_active_stack_file(append: bool) -> Result<File, &'static str> {
@@ -64,6 +67,13 @@ fn get_stack_file(file_path: PathBuf, file_name: String, append: bool) -> Result
         .truncate(!append)
         .create(true)
         .open(file_path).map_err(|_| { "Failed to open stack file" })
+}
+
+pub fn write_top_item(stack_file: File, item: DFTodoItem) -> Result<(), &'static str> {
+    let mut file = LineWriter::new(stack_file);
+    file.write_all((item.item + "\n").as_bytes()).map_err(|_| {"Error writing to file"})?;
+
+    Ok(())
 }
 
 pub fn get_top_item(stack_file: File) -> Option<String> {

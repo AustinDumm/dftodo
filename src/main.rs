@@ -8,7 +8,6 @@ use std::io::{
     Write,
     BufRead,
     BufReader,
-    LineWriter,
 };
 
 use crate::config::{
@@ -20,6 +19,7 @@ use crate::config::{
 use crate::file::{
     get_active_stack_file,
     get_top_item,
+    write_top_item,
 };
 
 fn main() -> Result<(), &'static str> {
@@ -46,10 +46,7 @@ fn print_top() -> Result<(), &'static str> {
 fn push_item(item: DFTodoItem) -> Result<(), &'static str> {
     let file = get_active_stack_file(true)?;
 
-    let mut file = LineWriter::new(file);
-    file.write_all((item.item + "\n").as_bytes()).unwrap();
-
-    Ok(())
+    write_top_item(file, item)
 }
 
 fn pop_item() -> Result<(), &'static str> {
