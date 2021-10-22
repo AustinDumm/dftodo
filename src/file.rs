@@ -85,3 +85,41 @@ pub fn get_top_item(stack_file: File) -> Option<String> {
         Some(Err(_)) => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+
+    struct MockFile {
+        data: String,
+    }
+
+    impl Write for MockFile {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.data.push_str(&String::from_utf8(buf.to_vec()).unwrap());
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Read for MockFile {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let mut written_bytes: usize = 0;
+            for (i, character) in self.data.as_bytes().iter().enumerate() {
+                if i == buf.len() {
+                    break;
+                }
+
+                buf[i] = *character;
+                written_bytes = i;
+            }
+
+            Ok(written_bytes)
+        }
+    }
+}
+
