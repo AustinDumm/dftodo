@@ -136,12 +136,18 @@ mod tests {
 
     struct MockFile {
         data: String,
+        append: bool,
     }
 
     impl Write for MockFile {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.data.push_str(&String::from_utf8(buf.to_vec()).unwrap());
-            Ok(buf.len())
+            if self.append {
+                self.data.push_str(&String::from_utf8(buf.to_vec()).unwrap());
+                Ok(buf.len())
+            } else {
+                self.data = String::from_utf8(buf.to_vec()).unwrap();
+                Ok(buf.len())
+            }
         }
 
         fn flush(&mut self) -> std::io::Result<()> {
@@ -162,6 +168,13 @@ mod tests {
             }
 
             Ok(written_bytes)
+        }
+    }
+
+    impl DFTodoCreate for MockFile {
+        fn create<P: AsRef<Path>>(_path: P, append: bool) -> io::Result<Self>
+        where Self: Sized {
+            Ok(MockFile { data: String::new(), append })
         }
     }
 }
