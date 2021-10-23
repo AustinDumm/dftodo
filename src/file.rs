@@ -2,6 +2,7 @@ use std::path::{
     PathBuf,
     Path,
 };
+
 use std::io::{
     self,
     BufRead,
@@ -10,6 +11,8 @@ use std::io::{
     Read,
     Write,
 };
+
+use std::iter::Peekable;
 
 use std::fs::{
     self,
@@ -27,38 +30,35 @@ use crate::config::{
     DFTodoItem,
 };
 
-pub trait DFTodoStackFile: Read + Write + DFTodoOpen + DFTodoCreate {}
-impl<T> DFTodoStackFile for T where T: Read + Write + DFTodoOpen + DFTodoCreate {}
-
-pub trait DFTodoOpen {
-    fn open<P: AsRef<Path>>(path: P) -> io::Result<Self>
-        where Self: Sized;
-}
+pub trait DFTodoStackFile: Read + Write + DFTodoCreate {}
+impl<T> DFTodoStackFile for T where T: Read + Write + DFTodoCreate {}
 
 pub trait DFTodoCreate {
-    fn create<P: AsRef<Path>>(path: P) -> io::Result<Self>
+    fn create<P: AsRef<Path>>(path: P, append: bool) -> io::Result<Self>
         where Self: Sized;
-}
-
-impl DFTodoOpen for File {
-    fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        File::open(path)
-    }
 }
 
 impl DFTodoCreate for File {
-    fn create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        File::create(path)
-    }
+    fn create<P: AsRef<Path>>(path: P, append: bool) -> io::Result<Self> {
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .append(append)
+            .truncate(!append)
+            .create(true)
+            .open(path)
+ }
 }
 
-pub fn get_active_stack_file(append: bool) -> Result<File, &'static str> {
-    let config_file = get_config_file()?;
+pub fn get_active_stack_file<F>(append: bool) -> Result<F, &'static str>
+where F: DFTodoStackFile {
+    let config_file: F = get_config_file()?;
     let (stack_file_directory, stack_file_name) = get_stack_directory(config_file)?;
     get_stack_file(stack_file_directory, stack_file_name, append)
 }
 
-fn get_config_file() -> Result<File, &'static str> {
+fn get_config_file<F>() -> Result<F, &'static str>
+where F: DFTodoStackFile {
     if !CONFIG_FILE_PATH.as_path().exists() {
         fs::create_dir_all(CONFIG_PATH.as_path()).unwrap();
 
@@ -72,41 +72,54 @@ fn get_config_file() -> Result<File, &'static str> {
         serde_json::to_writer(file, &config).unwrap()
     }
 
-    File::open(CONFIG_FILE_PATH.as_path()).map_err(|_| { "Failed to open configuration file" })
+    F::create(CONFIG_FILE_PATH.as_path(), true).map_err(|_| { "Failed to open configuration file" })
 }
 
-fn get_stack_directory(config_file: File) -> Result<(PathBuf, String), &'static str> {
+fn get_stack_directory<F>(config_file: F) -> Result<(PathBuf, String), &'static str>
+where F: DFTodoStackFile {
     let config: Config = serde_json::from_reader(config_file).unwrap();
     Ok((config.data_path, config.file_name))
 }
 
-fn get_stack_file(file_path: PathBuf, file_name: String, append: bool) -> Result<File, &'static str> {
-    let path = file_path.as_path();
-    let mut file_path = file_path.clone();
+fn get_stack_file<F>(mut file_path: PathBuf, file_name: String, append: bool) -> Result<F, &'static str>
+where F: DFTodoStackFile {
     file_path.push(file_name);
+    let path = file_path.as_path();
 
-    if !path.exists() {
-        fs::create_dir_all(path).unwrap();
-        File::create(file_path.clone()).unwrap();
+    F::create(path, append)
+        .map_err(|_| { "Error opening file" })
+}
+
+pub fn write_top_item<F>(stack_file: F, item: DFTodoItem) -> Result<(), &'static str>
+where F: DFTodoStackFile {
+    let mut file = LineWriter::new(stack_file);
+    file.write_all((item.item + "\n").as_bytes()).map_err(|_| {"Error writing to file"})
+}
+
+pub fn remove_top_item<F>(stack_file: F) -> Result<(), &'static str>
+where F: DFTodoStackFile {
+    let line_iter = BufReader::new(stack_file).lines().peekable();
+    let content = collect_all_but_last(line_iter);
+    let mut file: File = get_active_stack_file(false)?;
+    file.write_all(content.as_bytes()).map_err(|_| { "Failed to write to file" })
+}
+
+fn collect_all_but_last<I>(mut peekable: Peekable<I>) -> String
+where I: Iterator<Item = std::io::Result<String>> {
+    let mut collected: String = String::new();
+    while let Some(Ok(item)) = peekable.next() {
+        if peekable.peek().is_none() {
+            break;
+        }
+
+        collected += &(item + "\n");
     }
 
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .append(append)
-        .truncate(!append)
-        .create(true)
-        .open(file_path).map_err(|_| { "Failed to open stack file" })
+    collected
 }
 
-pub fn write_top_item(stack_file: File, item: DFTodoItem) -> Result<(), &'static str> {
-    let mut file = LineWriter::new(stack_file);
-    file.write_all((item.item + "\n").as_bytes()).map_err(|_| {"Error writing to file"})?;
-
-    Ok(())
-}
-
-pub fn get_top_item(stack_file: File) -> Option<String> {
+pub fn get_top_item<F>(stack_file: F) -> Option<String>
+where F: DFTodoStackFile {
     let iterator = BufReader::new(stack_file).lines();
 
     match iterator.last() {
