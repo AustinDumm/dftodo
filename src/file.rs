@@ -1,8 +1,13 @@
-use std::path::PathBuf;
+use std::path::{
+    PathBuf,
+    Path,
+};
 use std::io::{
+    self,
     BufRead,
     BufReader,
     LineWriter,
+    Read,
     Write,
 };
 
@@ -21,6 +26,31 @@ use crate::config::{
     Config,
     DFTodoItem,
 };
+
+pub trait DFTodoStackFile: Read + Write + DFTodoOpen + DFTodoCreate {}
+impl<T> DFTodoStackFile for T where T: Read + Write + DFTodoOpen + DFTodoCreate {}
+
+pub trait DFTodoOpen {
+    fn open<P: AsRef<Path>>(path: P) -> io::Result<Self>
+        where Self: Sized;
+}
+
+pub trait DFTodoCreate {
+    fn create<P: AsRef<Path>>(path: P) -> io::Result<Self>
+        where Self: Sized;
+}
+
+impl DFTodoOpen for File {
+    fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        File::open(path)
+    }
+}
+
+impl DFTodoCreate for File {
+    fn create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        File::create(path)
+    }
+}
 
 pub fn get_active_stack_file(append: bool) -> Result<File, &'static str> {
     let config_file = get_config_file()?;
