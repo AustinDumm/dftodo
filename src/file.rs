@@ -67,17 +67,17 @@ where F: DFTodoStackFile {
 fn get_config_file<F>(config_file_path: &Path,
                       default_data_path: PathBuf) -> Result<F, &'static str>
 where F: DFTodoStackFile {
+    let mut file = F::create(config_file_path, true).map_err(|_| { "Failed to open configuration file" })?;
     if !config_file_path.exists() {
         let config =
             Config { 
                 data_path: default_data_path.clone(),
             };
 
-        let file = F::create(config_file_path, true).map_err(|_| { "Failed to open configuration file" })?;
-        serde_json::to_writer(file, &config).unwrap()
+        serde_json::to_writer(&mut file, &config).unwrap()
     }
 
-    F::create(config_file_path, true).map_err(|_| { "Failed to open configuration file" })
+    Ok(file)
 }
 
 fn get_stack_directory<F>(config_file: F) -> Result<PathBuf, &'static str>
@@ -151,9 +151,11 @@ mod tests {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
             if self.append {
                 self.data.push_str(&String::from_utf8(buf.to_vec()).unwrap());
+                println!("!!! written: {}. path: {}", self.data, self.path);
                 Ok(buf.len())
             } else {
                 self.data = String::from_utf8(buf.to_vec()).unwrap();
+                println!("!!! overwrite written: {}", self.data);
                 Ok(buf.len())
             }
         }
@@ -188,8 +190,10 @@ mod tests {
 
     #[test]
     fn creates_correct_config_file() -> Result<(), &'static str> {
-        let mock_file: MockFile = get_config_file(Path::new("test/path/dir/file"), PathBuf::new())?;
-        assert_eq!(mock_file.path, String::from("test/path/dir/file"));
+        let mock_file: MockFile = get_config_file(Path::new("dir/conf.json"), [r"path", "stack.txt"].iter().collect())?;
+        assert_eq!(mock_file.path, String::from("dir/conf.json"));
+        assert_eq!(mock_file.append, true);
+        assert_eq!(mock_file.data, "{\"data_path\":\"path/stack.txt\"}");
 
         Ok(())
     }
