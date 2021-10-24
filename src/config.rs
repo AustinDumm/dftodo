@@ -7,28 +7,22 @@ use serde::{
 };
 
 lazy_static! {
-    pub static ref CONFIG_PATH: PathBuf = {
-        let mut path = dirs::config_dir().unwrap();
-        path.push("dftodo");
-        path
-    };
-
     pub static ref CONFIG_FILE_PATH: PathBuf = {
-        let mut path = dirs::config_dir().unwrap();
-        path.push("dftodo");
-        path.push("config");
-        path.set_extension("json");
-        path
+        let mut path_buf = dirs::config_dir().unwrap();
+        path_buf.push("dftodo");
+        path_buf.push("config");
+        path_buf.set_extension("json");
+        path_buf
     };
 
-    pub static ref DEFAULT_DATA_PATH: PathBuf = {
-        let mut path = dirs::data_dir().unwrap();
-        path.push("dftodo");
-        path
+    pub static ref DEFAULT_DATA_PATH_BUF: PathBuf = {
+        let mut path_buf = dirs::data_dir().unwrap();
+        path_buf.push("dftodo");
+        path_buf.push("stack");
+        path_buf.set_extension("txt");
+        path_buf
     };
 }
-
-pub const DEFAULT_DATA_FILE_NAME: &str = "stack";
 
 #[derive(Clap, Debug)]
 #[clap(name = "DFTodo", 
@@ -60,5 +54,4 @@ pub struct DFTodoItem {
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub data_path: PathBuf,
-    pub file_name: String,
 }

@@ -21,11 +21,6 @@ use std::fs::{
 };
 
 use crate::config::{
-    CONFIG_FILE_PATH,
-    CONFIG_PATH,
-    DEFAULT_DATA_PATH,
-    DEFAULT_DATA_FILE_NAME,
-
     Config,
     DFTodoItem,
 };
@@ -40,6 +35,10 @@ pub trait DFTodoCreate {
 
 impl DFTodoCreate for File {
     fn create<P: AsRef<Path>>(path: P, append: bool) -> io::Result<Self> {
+        if !path.as_ref().parent().unwrap().exists() {
+            fs::create_dir_all(path.as_ref().parent().unwrap()).unwrap();
+        }
+
         OpenOptions::new()
             .read(true)
             .write(true)
@@ -50,40 +49,45 @@ impl DFTodoCreate for File {
  }
 }
 
-pub fn get_active_stack_file<F>(append: bool) -> Result<F, &'static str>
-where F: DFTodoStackFile {
-    let config_file: F = get_config_file()?;
-    let (stack_file_directory, stack_file_name) = get_stack_directory(config_file)?;
-    get_stack_file(stack_file_directory, stack_file_name, append)
+pub fn get_active_stack_file_path(config_file_path: &Path,
+                                  default_data_path: PathBuf) -> Result<PathBuf, &'static str> {
+    let config_file: File = get_config_file(config_file_path,
+                                         default_data_path)?;
+    get_stack_directory(config_file)
 }
 
-fn get_config_file<F>() -> Result<F, &'static str>
+pub fn get_active_stack_file<F>(append: bool,
+                                config_file_path: &Path,
+                                default_data_path: PathBuf) -> Result<F, &'static str>
 where F: DFTodoStackFile {
-    if !CONFIG_FILE_PATH.as_path().exists() {
-        fs::create_dir_all(CONFIG_PATH.as_path()).unwrap();
+    let stack_file_directory = get_active_stack_file_path(config_file_path, default_data_path)?;
+    get_stack_file(stack_file_directory, append)
+}
 
-        let file = File::create(CONFIG_FILE_PATH.as_path()).unwrap();
+fn get_config_file<F>(config_file_path: &Path,
+                      default_data_path: PathBuf) -> Result<F, &'static str>
+where F: DFTodoStackFile {
+    if !config_file_path.exists() {
         let config =
             Config { 
-                data_path: DEFAULT_DATA_PATH.clone(),
-                file_name: DEFAULT_DATA_FILE_NAME.to_string(),
+                data_path: default_data_path.clone(),
             };
 
+        let file = F::create(config_file_path, true).map_err(|_| { "Failed to open configuration file" })?;
         serde_json::to_writer(file, &config).unwrap()
     }
 
-    F::create(CONFIG_FILE_PATH.as_path(), true).map_err(|_| { "Failed to open configuration file" })
+    F::create(config_file_path, true).map_err(|_| { "Failed to open configuration file" })
 }
 
-fn get_stack_directory<F>(config_file: F) -> Result<(PathBuf, String), &'static str>
+fn get_stack_directory<F>(config_file: F) -> Result<PathBuf, &'static str>
 where F: DFTodoStackFile {
     let config: Config = serde_json::from_reader(config_file).unwrap();
-    Ok((config.data_path, config.file_name))
+    Ok(config.data_path)
 }
 
-fn get_stack_file<F>(mut file_path: PathBuf, file_name: String, append: bool) -> Result<F, &'static str>
+fn get_stack_file<F>(file_path: PathBuf, append: bool) -> Result<F, &'static str>
 where F: DFTodoStackFile {
-    file_path.push(file_name);
     let path = file_path.as_path();
 
     F::create(path, append)
@@ -96,12 +100,15 @@ where F: DFTodoStackFile {
     file.write_all((item.item + "\n").as_bytes()).map_err(|_| {"Error writing to file"})
 }
 
-pub fn remove_top_item<F>(stack_file: F) -> Result<(), &'static str>
-where F: DFTodoStackFile {
-    let line_iter = BufReader::new(stack_file).lines().peekable();
+pub fn remove_top_item(stack_file_path: PathBuf) -> Result<(), &'static str> {
+    // Because this is reading the file as truncated, it is taking in no data then replacing it
+    // with nothing as well. We need to read the full data in as non truncated then open a new that
+    // is truncated
+    let read_file: File = get_stack_file(stack_file_path.clone(), true)?;
+    let line_iter = BufReader::new(read_file).lines().peekable();
     let content = collect_all_but_last(line_iter);
-    let mut file: File = get_active_stack_file(false)?;
-    file.write_all(content.as_bytes()).map_err(|_| { "Failed to write to file" })
+    let mut write_file: File = get_stack_file(stack_file_path, false)?;
+    write_file.write_all(content.as_bytes()).map_err(|_| { "Failed to write to file" })
 }
 
 fn collect_all_but_last<I>(mut peekable: Peekable<I>) -> String
@@ -135,6 +142,7 @@ mod tests {
     use std::io::Read;
 
     struct MockFile {
+        path: String,
         data: String,
         append: bool,
     }
@@ -172,10 +180,18 @@ mod tests {
     }
 
     impl DFTodoCreate for MockFile {
-        fn create<P: AsRef<Path>>(_path: P, append: bool) -> io::Result<Self>
+        fn create<P: AsRef<Path>>(path: P, append: bool) -> io::Result<Self>
         where Self: Sized {
-            Ok(MockFile { data: String::new(), append })
+            Ok(MockFile { path: path.as_ref().to_str().unwrap().to_string(), data: String::new(), append })
         }
+    }
+
+    #[test]
+    fn creates_correct_config_file() -> Result<(), &'static str> {
+        let mock_file: MockFile = get_config_file(Path::new("test/path/dir/file"), PathBuf::new())?;
+        assert_eq!(mock_file.path, String::from("test/path/dir/file"));
+
+        Ok(())
     }
 }
 
