@@ -49,9 +49,10 @@ impl DFTodoCreate for File {
  }
 }
 
-pub fn get_active_stack_file_path(config_file_path: &Path,
-                                  default_data_path: PathBuf) -> Result<PathBuf, &'static str> {
-    let config_file: File = get_config_file(config_file_path,
+pub fn get_active_stack_file_path<F>(config_file_path: &Path,
+                                     default_data_path: PathBuf) -> Result<PathBuf, &'static str>
+where F: DFTodoStackFile {
+    let config_file: F = get_config_file(config_file_path,
                                          default_data_path)?;
     get_stack_directory(config_file)
 }
@@ -60,7 +61,7 @@ pub fn get_active_stack_file<F>(append: bool,
                                 config_file_path: &Path,
                                 default_data_path: PathBuf) -> Result<F, &'static str>
 where F: DFTodoStackFile {
-    let stack_file_directory = get_active_stack_file_path(config_file_path, default_data_path)?;
+    let stack_file_directory = get_active_stack_file_path::<F>(config_file_path, default_data_path)?;
     get_stack_file(stack_file_directory, append)
 }
 
@@ -145,17 +146,16 @@ mod tests {
         path: String,
         data: String,
         append: bool,
+        read_index: usize,
     }
 
     impl Write for MockFile {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
             if self.append {
                 self.data.push_str(&String::from_utf8(buf.to_vec()).unwrap());
-                println!("!!! written: {}. path: {}", self.data, self.path);
                 Ok(buf.len())
             } else {
                 self.data = String::from_utf8(buf.to_vec()).unwrap();
-                println!("!!! overwrite written: {}", self.data);
                 Ok(buf.len())
             }
         }
@@ -168,13 +168,14 @@ mod tests {
     impl Read for MockFile {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
             let mut written_bytes: usize = 0;
-            for (i, character) in self.data.as_bytes().iter().enumerate() {
+            for (i, character) in self.data.as_bytes().iter().skip(self.read_index).enumerate() {
                 if i == buf.len() {
                     break;
                 }
 
                 buf[i] = *character;
-                written_bytes = i;
+                written_bytes = i + 1;
+                self.read_index += 1;
             }
 
             Ok(written_bytes)
@@ -184,7 +185,7 @@ mod tests {
     impl DFTodoCreate for MockFile {
         fn create<P: AsRef<Path>>(path: P, append: bool) -> io::Result<Self>
         where Self: Sized {
-            Ok(MockFile { path: path.as_ref().to_str().unwrap().to_string(), data: String::new(), append })
+            Ok(MockFile { path: path.as_ref().to_str().unwrap().to_string(), data: String::new(), append, read_index: 0 })
         }
     }
 
@@ -194,6 +195,16 @@ mod tests {
         assert_eq!(mock_file.path, String::from("dir/conf.json"));
         assert_eq!(mock_file.append, true);
         assert_eq!(mock_file.data, "{\"data_path\":\"path/stack.txt\"}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn creates_correct_stack_file() -> Result<(), &'static str> {
+        let stack_file: MockFile = get_active_stack_file(true, Path::new("dir/conf.json"), [r"path", "stack.txt"].iter().collect())?;
+        assert_eq!(stack_file.path, String::from("path/stack.txt"));
+        assert_eq!(stack_file.append, true);
+        assert_eq!(stack_file.data, "");
 
         Ok(())
     }

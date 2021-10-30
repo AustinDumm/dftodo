@@ -53,8 +53,8 @@ fn push_item(item: DFTodoItem) -> Result<(), &'static str> {
 }
 
 fn pop_item() -> Result<(), &'static str> {
-    let path = get_active_stack_file_path(&CONFIG_FILE_PATH,
-                                          DEFAULT_DATA_PATH_BUF.to_path_buf())?;
+    let path = get_active_stack_file_path::<File>(&CONFIG_FILE_PATH,
+                                                  DEFAULT_DATA_PATH_BUF.to_path_buf())?;
     remove_top_item(path)
 }
 
