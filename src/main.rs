@@ -45,11 +45,11 @@ fn print_top() -> Result<(), &'static str> {
 }
 
 fn push_item(item: DFTodoItem) -> Result<(), &'static str> {
-    let file: File = get_active_stack_file(true,
+    let mut file: File = get_active_stack_file(true,
                                            &CONFIG_FILE_PATH,
                                            DEFAULT_DATA_PATH_BUF.to_path_buf())?;
 
-    write_top_item(file, item)
+    write_top_item(&mut file, item)
 }
 
 fn pop_item() -> Result<(), &'static str> {

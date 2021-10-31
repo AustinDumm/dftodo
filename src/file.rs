@@ -95,7 +95,7 @@ where F: DFTodoStackFile {
         .map_err(|_| { "Error opening file" })
 }
 
-pub fn write_top_item<F>(stack_file: F, item: DFTodoItem) -> Result<(), &'static str>
+pub fn write_top_item<F>(stack_file: &mut F, item: DFTodoItem) -> Result<(), &'static str>
 where F: DFTodoStackFile {
     let mut file = LineWriter::new(stack_file);
     file.write_all((item.item + "\n").as_bytes()).map_err(|_| {"Error writing to file"})
@@ -190,11 +190,9 @@ mod tests {
     }
 
     #[test]
-    fn creates_correct_config_file() -> Result<(), &'static str> {
-        let mock_file: MockFile = get_config_file(Path::new("dir/conf.json"), [r"path", "stack.txt"].iter().collect())?;
-        assert_eq!(mock_file.path, String::from("dir/conf.json"));
-        assert_eq!(mock_file.append, true);
-        assert_eq!(mock_file.data, "{\"data_path\":\"path/stack.txt\"}");
+    fn creates_correct_stack_file_path() -> Result<(), &'static str> {
+        let path_buf = get_active_stack_file_path::<MockFile>(Path::new("dir/conf.json"), [r"path", "stack.txt"].iter().collect())?;
+        assert_eq!(path_buf, [r"path", "stack.txt"].iter().collect::<PathBuf>());
 
         Ok(())
     }
@@ -205,6 +203,32 @@ mod tests {
         assert_eq!(stack_file.path, String::from("path/stack.txt"));
         assert_eq!(stack_file.append, true);
         assert_eq!(stack_file.data, "");
+
+        Ok(())
+    }
+
+    #[test]
+    fn creates_correct_config_file() -> Result<(), &'static str> {
+        let mock_file: MockFile = get_config_file(Path::new("dir/conf.json"), [r"path", "stack.txt"].iter().collect())?;
+        assert_eq!(mock_file.path, String::from("dir/conf.json"));
+        assert_eq!(mock_file.append, true);
+        assert_eq!(mock_file.data, "{\"data_path\":\"path/stack.txt\"}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn does_write_top_item_to_empty() -> Result<(), &'static str> {
+        let item_text = "This is the new item";
+        let mut mock_file = MockFile { path: "path".to_string(), data: "".to_string(), append: true, read_index: 0 };
+        let item = DFTodoItem { item: item_text.to_string() };
+
+        write_top_item(&mut mock_file, item)?;
+
+        assert_eq!(mock_file.path, "path".to_string());
+        assert_eq!(mock_file.data, (item_text.to_string() + "\n"));
+        assert_eq!(mock_file.append, true);
+        assert_eq!(mock_file.read_index, 0);
 
         Ok(())
     }
