@@ -220,13 +220,32 @@ mod tests {
     #[test]
     fn does_write_top_item_to_empty() -> Result<(), &'static str> {
         let item_text = "This is the new item";
-        let mut mock_file = MockFile { path: "path".to_string(), data: "".to_string(), append: true, read_index: 0 };
+        let path = "path";
+        let mut mock_file = MockFile { path: path.to_string(), data: "".to_string(), append: true, read_index: 0 };
         let item = DFTodoItem { item: item_text.to_string() };
 
         write_top_item(&mut mock_file, item)?;
 
-        assert_eq!(mock_file.path, "path".to_string());
+        assert_eq!(mock_file.path, path.to_string());
         assert_eq!(mock_file.data, (item_text.to_string() + "\n"));
+        assert_eq!(mock_file.append, true);
+        assert_eq!(mock_file.read_index, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn does_write_top_item_to_existing() -> Result<(), &'static str> {
+        let existing_data = "existing\n";
+        let new_data = "new data here";
+        let path = "path";
+        let mut mock_file = MockFile { path: path.to_string(), data: existing_data.to_string(), append: true, read_index: 0 };
+        let item = DFTodoItem { item: new_data.to_string() };
+
+        write_top_item(&mut mock_file, item)?;
+
+        assert_eq!(mock_file.path, path.to_string());
+        assert_eq!(mock_file.data, (existing_data.to_string() + new_data + "\n"));
         assert_eq!(mock_file.append, true);
         assert_eq!(mock_file.read_index, 0);
 
